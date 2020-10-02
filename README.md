@@ -1,1 +1,1 @@
-# gitlab-ci
+# Examples of gitlab-ci.yml

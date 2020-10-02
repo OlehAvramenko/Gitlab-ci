@@ -1,0 +1,68 @@
+default:
+  image: node
+  tags: [docker]
+  
+  before_script:
+     - npm install
+  
+  cache:
+    paths:
+      - node_modules/
+  
+workflow:
+    rules:
+      - if: '$CI_PIPELINE_SOURCE == "push"'
+
+stages:
+  - test
+  - build
+  - deploy
+  - bump
+
+# ================== TEST APP TRIGGERED BY PUSH IN FEATURE BRANCH  ===============
+test-react-app:
+  stage: test
+  script: npm test
+
+# ================== BUILD APP TRIGGERED BY PUSH IN FEATURE AND COMMIT MASTER ====================
+build-react-app:
+  stage: build
+  script: npm run build
+  artifacts:
+    paths:
+       - build/
+
+# ==================== DEPLOY APP ==========================
+pages:
+  stage: deploy
+  inherit:
+        default: [image, tags]
+  script:
+     - rm -rf public/*
+     - mv build/* public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+
+# ======================= BUMP APP VERSION ======================
+bump-version:
+    stage: bump
+    inherit:
+        default: [image, tags]
+    script: 
+      - git checkout master
+      - git status
+      - git config --global user.name "$GITLAB_USER_NAME"
+      - git config --global user.email "$GITLAB_USER_EMAIL"
+      - git remote set-url origin https://$PUSH_USER:$PUSH_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_PATH.git
+      - VERSION=`git diff HEAD~1 HEAD -- package.json | grep '"version"'>/dev/null || echo 'false'`
+      - echo $VERSION 
+      - |
+          if [ "$VERSION" == 'false'  ]; then
+            npm version minor --force -m "[ci skip] Update version app" 
+            git push origin HEAD:master
+          fi
+    rules:
+       - if: '$CI_COMMIT_BRANCH == "master"'
